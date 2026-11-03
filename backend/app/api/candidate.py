@@ -124,15 +124,18 @@ def require_candidate(current_user: Usuario = Depends(get_current_user)) -> Usua
 
 def _get_or_create_model_id(db: Session) -> int:
     model_name = "nvidia:" + configured_model() if is_configured() else "heuristic"
-    try:
-        row = db.execute(text("SELECT id FROM modelos_ia WHERE nombre = :n LIMIT 1"), {"n": model_name}).fetchone()
-        if row:
-            return int(row[0])
-        db.execute(text("INSERT INTO modelos_ia (nombre) VALUES (:n)"), {"n": model_name})
-        db.commit()
-        return int(db.execute(text("SELECT LAST_INSERT_ID()")).scalar())
-    except Exception:
-        return 1
+    db.execute(
+        text("""
+            INSERT INTO modelos_ia (nombre) VALUES (:n)
+            ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)
+        """),
+        {"n": model_name},
+    )
+    model_id = db.execute(
+        text("SELECT id FROM modelos_ia WHERE nombre = :n"),
+        {"n": model_name},
+    ).scalar_one()
+    return int(model_id)
 
 def _get_candidato_id(db: Session, current_user: Usuario) -> int:
     try:

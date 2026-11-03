@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -44,7 +45,7 @@ def get_current_user(
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
-    except JWTError:
+    except InvalidTokenError:
         raise credentials_exception
     user = db.query(Usuario).filter(Usuario.correo == email).first()
     if user is None:
