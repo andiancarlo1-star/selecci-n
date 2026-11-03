@@ -1,0 +1,48 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: talento_ia_sistema
+      MYSQL_USER: talento
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Define MYSQL_PASSWORD en el archivo .env de la raíz}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Define MYSQL_ROOT_PASSWORD en el archivo .env de la raíz}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://talento:${MYSQL_PASSWORD}@db:3306/talento_ia_sistema?charset=utf8mb4
+      SECRET_KEY: ${SECRET_KEY:?Define SECRET_KEY en el archivo .env de la raíz}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:?Define NVIDIA_API_KEY en el archivo .env de la raíz}
+      NVIDIA_MODEL: ${NVIDIA_MODEL:-qwen/qwen3-next-80b-a3b-instruct}
+      NVIDIA_TIMEOUT_SECONDS: ${NVIDIA_TIMEOUT_SECONDS:-45}
+      NVIDIA_MAX_RETRIES: ${NVIDIA_MAX_RETRIES:-2}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
+      APP_ENV: ${APP_ENV:-development}
+    depends_on:
+      db: { condition: service_healthy }
+    volumes: [uploads_data:/app/uploads]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8443/healthz')"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+  web:
+    build:
+      context: ./frontend
+      args: { VITE_API_BASE: /api }
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    ports: ["8080:80"]
+volumes:
+  mysql_data:
+  uploads_data:
